@@ -1,12 +1,16 @@
 #Initialisation / Pre-Setups
-import sqlite3,hashlib,secrets,base64,pickle,os
+import sqlite3,hashlib,secrets,base64,pickle,os,time
 from cryptography.fernet import Fernet
 from prettytable import PrettyTable
 
+#Runtime calculator:
+stime=time.perf_counter()
+
 #Function Defs:
 def dbcnct():
+    os.makedirs("data",exist_ok=True)
     global Db,Dc
-    Db=sqlite3.connect("Psuedo.db")
+    Db=sqlite3.connect("data/Psuedo.db")
     Dc=Db.cursor()
     Dc.execute("Create table Seneor (Password Varchar(256) Primary key)")
     Dc.execute("Create table seneorita (S_no integer Primary Key Autoincrement,Domain varchar(256) Not Null,Username varchar(256) Not Null,Password varchar(256) Not Null)")
@@ -33,7 +37,7 @@ def Reg():
         PC=bytearray(input("Confirm Password: "),"utf-8")
         if P == PC: #Password Match-up confirmation
             S=secrets.token_bytes(16) #Generating random bytes for salt generation
-            f3=open("Pepper.dat","wb")
+            f3=open("data/Pepper.dat","wb")
             pickle.dump(S.hex(),f3)
             f3.close()
             Dc.execute("insert into Seneor values(?)",(hashlib.pbkdf2_hmac('sha256',bytes(P),S,10000,32).hex(),)) #Inserting Hashed Password to database
@@ -54,7 +58,7 @@ def Login():
         if P == PC: #Password Match-up confirmation
             Dc.execute("Select Password from Seneor")
             Px=Dc.fetchone()[0]
-            f3=open("Pepper.dat","rb")
+            f3=open("data/Pepper.dat","rb")
             S=pickle.load(f3)
             f3.close()
             if secrets.compare_digest(hashlib.pbkdf2_hmac('sha256',bytes(P),bytes.fromhex(S),10000,32).hex(),Px): #Comapring both passwords 
@@ -78,7 +82,7 @@ def Login():
                                 Sn=x[0]+1
                             print(table)
                         print("\n|------------------------------------------------------------------------------|")
-                        print("\n| Pick a choice |\n1: Add record\n2: Delete record\n3: Change record\n4: Search record\n5: Additional Settings\n6: Logout\n7: Quit")
+                        print("\n| Pick a choice |\n1: Add record\n2: Delete record\n3: Change record\n4: Search record\n5: Additional Settings\n6: Save & Quit")
                         ch=int(input("Enter your choice: "))
                         if ch == 1:
                             Domain=F.encrypt(input("Enter the Domain of registraion: ").encode()).hex()
@@ -86,12 +90,10 @@ def Login():
                             Pai=F.encrypt(input("Enter the Password for the domain: ").encode()).hex()
                             Dc.execute("insert into seneorita values(?,?,?,?)",(Sn,Domain,Usi,Pai))
                             print("Successfuly inserted record\n")
-                            Db.commit()
                         elif ch == 2:
                             n=int(input("Input the Sn. of the record you wish to delete: "))      #Deleting records
                             Dc.execute("Delete from seneorita where S_no = ?",(n,))
                             print("Record succesfuly deleted\n")
-                            Db.commit()
                         elif ch == 3:
                             Sn=int(input("Input the Sn. of the record you wish to change: "))     #Altering Records
                             print("Please re-enter the following information\n")
@@ -100,7 +102,6 @@ def Login():
                             Pai=F.encrypt(input("Enter the Password for the domain: ").encode()).hex()
                             Dc.execute("update Seneorita set Domain =?,Username=?,Password=? where S_no = ?",(Domain,Usi,Pai,Sn))
                             print("Successfuly changed record\n")
-                            Db.commit()
                         elif ch == 4:
                             print("| Search Record |")
                             print("1: Search by Domain\n2: Search by Username\n3: Go Back")
@@ -128,7 +129,7 @@ def Login():
                                     PC=bytearray(input("Confirm Password: "),"utf-8")
                                     if P == PC:
                                         S=secrets.token_bytes(16) #Generating random bytes for salt generation
-                                        f3=open("Pepper.dat","wb")
+                                        f3=open("data/Pepper.dat","wb")
                                         pickle.dump(S.hex(),f3)
                                         f3.close()
                                         Dc.execute("Delete from Seneor")
@@ -144,6 +145,11 @@ def Login():
                                             for x in rec:
                                                 Dc.execute("insert into seneorita values(?,?,?,?)",(x[0],F2.encrypt(F.decrypt(bytes.fromhex(x[1]))).hex(),F2.encrypt(F.decrypt(bytes.fromhex(x[2]))).hex(),F2.encrypt(F.decrypt(bytes.fromhex(x[3]))).hex()))   
                                             Db.commit()
+                                            f2=open("data/Hex.dat","wb")
+                                            f4=open("data/Psuedo.db","rb")
+                                            pickle.dump(hashlib.file_digest(f4,"sha256").hexdigest(),f2)
+                                            f4.close()
+                                            f2.close()
                                             del F2
                                         break                                  
                                     else:
@@ -153,7 +159,7 @@ def Login():
                             elif s == 2:
                                 Dc.execute("Drop table seneorita")
                                 Dc.execute("Drop table Seneor")
-                                os.remove("Pepper.dat")
+                                os.remove("data/Pepper.dat")
                                 Db.commit()
                                 print("| Account Deleted Successfuly |\n \t| Quitting |")
                                 return True
@@ -161,14 +167,9 @@ def Login():
                                 pass
                             else:
                                 print(" | Invalid Input | \n     Try Again")
-                                
                         elif ch == 6:
-                            print(" | Successfuly Logged out |")
-                            table.clear()
-                            del(F,table,P,PC)
-                            break
-                        elif ch == 7:
-                            print(" | Quitting |")
+                            Db.commit()
+                            print(" | Saved: Quitting |\n--------------------\n   SAFEByTE 0.2.5 \n--------------------")
                             table.clear()
                             del(F,table,P,PC)
                             return True
@@ -179,81 +180,86 @@ def Login():
                         continue
                 break
             else:
-                print("Wrong Password")
+                print("    |  Wrong Password  |")
                 continue
         else:
             print("| Password confirm mismatch | \n\t Try Again")
             continue
 
 #File/Database integrity verification and Database intialisation
-if not os.path.exists("Psuedo.db"):    
-    print("dbFile Does not Exist\nCheck for possible alteration to Psuedo.db")
+if not os.path.exists("data/Psuedo.db"):    
+    print("┌──[ SAFEByTE ]───────────────────────────────────┐\n│                                                 │\n│   > VERIFYING DATABASE INTEGRITY...             │\n│   > |                               |   0%      │\n│                                                 │\n│   > DBFILE     : NOTFOUND                       │\n│                                                 │\n│                                                 │\n│                                                 │\n│                                                 │\n│               [ ACCESS DENIED ]                 │\n│                                                 │\n└─────────────────────────────────────────────────┘\n")
     In=input("Create a new Database\n| YES  or Quit |\n\t")
     if In in ("YES","yes","Yes","Y","y"):
-        if os.path.exists("Hex.dat"):
-            os.remove("Hex.dat")
-        if os.path.exists("Pepper.dat"):
-            os.remove("Pepper.dat")
+        if os.path.exists("data/Hex.dat"):
+            os.remove("data/Hex.dat")
+        if os.path.exists("data/Pepper.dat"):
+            os.remove("data/Pepper.dat")
         dbcnct()
-    elif In in ("QUIT","quit","q","Q"):
+    elif In in ("QUIT","quit","q","Q","Quit"):
         quit() 
     else:
-        print(" | Invalid Input | \n     Try Again")
+        print(" | Invalid Input | \n     | Quitting |")
+        quit()
 else:
-    print("|DbFile Found|proceedig to digest Hash")
-    f1=open("Psuedo.db","rb")
+    f1=open("data/Psuedo.db","rb")
     NewHex=hashlib.file_digest(f1,"sha256").hexdigest().encode()
     f1.close()
-    if not os.path.exists("Hex.dat"):
-        print("HexFile Does not Exist\nCheck for possible alteration to Hex.dat")
+    if not os.path.exists("data/Hex.dat"):
+        print("┌──[ SAFEByTE ]───────────────────────────────────┐\n│                                                 │\n│   > VERIFYING DATABASE INTEGRITY...             │\n│   > ███████                         | 25%       │\n│                                                 │\n│   > DBFILE     : FOUND                          │\n│   > HASHFILE   : NOTFOUND                       │\n│                                                 │\n│                                                 │\n│                                                 │\n│               [ ACCESS DENIED ]                 │\n│                                                 │\n└─────────────────────────────────────────────────┘\n")
         In=input("Create a new Database\n| YES  or Quit |\n\t")
         if In in ("YES","yes","Yes","Y","y"):
-            os.remove("Psuedo.db")
-            if os.path.exists("Pepper.dat"):
-                os.remove("Pepper.dat")
+            os.remove("data/Psuedo.db")
+            if os.path.exists("data/Pepper.dat"):
+                os.remove("data/Pepper.dat")
             dbcnct()
         elif In in ("QUIT","quit","q","Q"):
             quit() 
         else:
-            print(" | Invalid Input | \n     Try Again")
+            print(" | Invalid Input | \n     | Quitting |")
+            quit()
     else:
-        print("|HexFile Found|proceedig to compare Hash")
-        f2=open("Hex.dat","rb")
-        X=pickle.load(f2).encode()
+        f2=open("data/Hex.dat","rb")
+        try:
+            X=pickle.load(f2).encode()
+        except:
+            X=b'0'
         f2.close()
         if secrets.compare_digest(X,NewHex):
-            print("| Hash verification Success |")
-            if not os.path.exists("Pepper.dat"):
-                print("| SaltHashFile Not Found |\n |Recent Account Reset| /possible alteration to Pepper.dat")
+            if not os.path.exists("data/Pepper.dat"):
+                print("┌──[ SAFEByTE ]───────────────────────────────────┐\n│                                                 │\n│   > VERIFYING DATABASE INTEGRITY...             │\n│   > ███████████████████████         |  75%      │\n│                                                 │\n│   > DBFILE     : FOUND                          │\n│   > HASHFILE   : FOUND                          │\n│   > HASHDIGEST : VERIFIED                       │\n│   > SALT       : NOTFOUND                       │\n│                                                 │\n│               [ ACCESS DENIED ]                 │\n│                                                 │\n└─────────────────────────────────────────────────┘\n")
                 In=input("Create a new Database\n| YES  or Quit |\n\t")
                 if In in ("YES","yes","Yes","Y","y"):
-                    os.remove("Psuedo.db")
-                    os.remove("Hex.dat")
+                    os.remove("data/Psuedo.db")
+                    os.remove("data/Hex.dat")
                     dbcnct()
                 elif In in ("QUIT","quit","q","Q"):
                     quit() 
                 else:
-                    print(" | Invalid Input | \n     Try Again")
+                    print(" | Invalid Input | \n     | Quitting |")
+                    quit()
             else:
-                Db=sqlite3.connect("Psuedo.db")
+                Db=sqlite3.connect("data/Psuedo.db")
                 Dc=Db.cursor()
+                print("┌──[ SAFEByTE ]───────────────────────────────────┐\n│                                                 │\n│   > VERIFYING DATABASE INTEGRITY...             │\n│   > ████████████████████████████████ 100%       │\n│                                                 │\n│   > DBFILE     : FOUND                          │\n│   > HASHFILE   : FOUND                          │\n│   > HASHDIGEST : VERIFIED                       │\n│   > SALT       : FOUND                          │\n│                                                 │\n│               [ ACCESS GRANTED ]                │\n│                                                 │\n└─────────────────────────────────────────────────┘\n")
         else:
-            print("| Hash Verification Failed |\nDatabase Compromised")
+            print("┌──[ SAFEByTE ]───────────────────────────────────┐\n│                                                 │\n│   > VERIFYING DATABASE INTEGRITY...             │\n│   > ███████████████                 |  50%      │\n│                                                 │\n│   > DBFILE     : FOUND                          │\n│   > HASHFILE   : FOUND                          │\n│   > HASHDIGEST : FAILED                         │\n│                                                 │\n│                                                 │\n│               [ ACCESS DENIED ]                 │\n│                                                 │\n└─────────────────────────────────────────────────┘\n")
             In=input("Create a new Database\n| YES  or Quit |\n\t")
             if In in ("YES","yes","Yes","Y","y"):
-                os.remove("Psuedo.db")
-                os.remove("Hex.dat")
-                if os.path.exists("Pepper.dat"):
-                    os.remove("Pepper.dat")
+                os.remove("data/Psuedo.db")
+                os.remove("data/Hex.dat")
+                if os.path.exists("data/Pepper.dat"):
+                    os.remove("data/Pepper.dat")
                 dbcnct()
             elif In in ("QUIT","quit","q","Q"):
                 quit() 
             else:
-                print(" | Invalid Input | \n     Try Again")
+                print(" | Invalid Input | \n     | Quitting |")
+                quit()
 
  # Program Loop
 while True:
-    if os.path.exists("Pepper.dat"):
+    if os.path.exists("data/Pepper.dat"):
         if Login():
             break
         else:
@@ -268,9 +274,20 @@ while True:
 #Deinitialisation
 Dc.close()    
 Db.close()
-f2=open("Hex.dat","wb")
-f4=open("Psuedo.db","rb")
+f2=open("data/Hex.dat","wb")
+f4=open("data/Psuedo.db","rb")
 pickle.dump(hashlib.file_digest(f4,"sha256").hexdigest(),f2)
 f4.close()
 f2.close()
+print(f"Runtime: {time.perf_counter() - stime} seconds.")
 quit()
+
+"""
+ █████    █████   █████   ███████  ██████   ██    ██ ████████ ██████
+██       ██   ██  ██      ██       ██   ██  ██    ██    ██    ██
+███████  ███████  █████   █████    ██████     ████      ██    █████
+     ██  ██   ██  ██      ██       ██   ██     ██       ██    ██
+██████   ██   ██  ██      ███████  ██████      ██       ██    ███████
+
+                                                                  v0.2.5
+Github.com/Solidsilvr                                                """
