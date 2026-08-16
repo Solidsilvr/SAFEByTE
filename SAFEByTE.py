@@ -161,6 +161,8 @@ def Login():
                                 Dc.execute("Drop table Seneor")
                                 os.remove("data/Pepper.dat")
                                 Db.commit()
+                                table.clear()
+                                del(F,table,P,PC)
                                 print("| Account Deleted Successfuly |\n \t| Quitting |")
                                 return True
                             elif s == 3:
